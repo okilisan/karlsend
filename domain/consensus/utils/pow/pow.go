@@ -106,16 +106,17 @@ func NewState(header externalapi.MutableBlockHeader, generatedag bool) *State {
 	}
 }
 
+// Return the current hashing algo used
 func GetHashingAlgoVersion() string {
 	return hashingAlgoVersion
 }
 
+// Return the readiness state of the context
 func (state *State) IsContextReady() bool {
 	if state != nil && &state.context != nil {
 		return state.context.ready
-	} else {
-		return false
 	}
+	return false
 }
 
 // CalculateProofOfWorkValue hashes the internal header and returns its big.Int value
