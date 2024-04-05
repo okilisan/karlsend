@@ -113,7 +113,7 @@ func GetHashingAlgoVersion() string {
 
 // IsContextReady returns the readiness state of the context
 func (state *State) IsContextReady() bool {
-	if state != nil && &state.context != nil {
+	if state != nil {
 		return state.context.ready
 	}
 	return false
