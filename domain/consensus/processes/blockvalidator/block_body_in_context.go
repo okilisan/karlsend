@@ -1,6 +1,8 @@
 package blockvalidator
 
 import (
+	"encoding/json"
+
 	"github.com/karlsen-network/karlsend/v2/domain/consensus/model"
 	"github.com/karlsen-network/karlsend/v2/domain/consensus/model/externalapi"
 	"github.com/karlsen-network/karlsend/v2/domain/consensus/ruleerrors"
@@ -35,6 +37,12 @@ func (v *blockValidator) ValidateBodyInContext(stagingArea *model.StagingArea, b
 		}
 
 		err = v.checkCoinbaseSubsidy(stagingArea, blockHash)
+		if err != nil {
+			return err
+		}
+
+		//TODO: control block version >= 3
+		err = v.CheckDevFee(stagingArea, blockHash)
 		if err != nil {
 			return err
 		}
@@ -197,5 +205,58 @@ func (v *blockValidator) checkCoinbaseSubsidy(
 			"wrong: expected %d but got %d", blockHash, expectedSubsidy, subsidy)
 	}
 
+	return nil
+}
+
+func (v *blockValidator) CheckDevFee(stagingArea *model.StagingArea, blockHash *externalapi.DomainHash) error {
+	pruningPoint, err := v.pruningStore.PruningPoint(v.databaseContext, stagingArea)
+	if err != nil {
+		return err
+	}
+	parents, err := v.dagTopologyManagers[0].Parents(stagingArea, blockHash)
+	if err != nil {
+		return err
+	}
+	for _, parent := range parents {
+		isInFutureOfPruningPoint, err := v.dagTopologyManagers[0].IsAncestorOf(stagingArea, pruningPoint, parent)
+		if err != nil {
+			return err
+		}
+		// The pruning proof ( https://github.com/kaspanet/docs/blob/main/Reference/prunality/Prunality.pdf ) concludes
+		// that it's impossible for a block to be merged if it was created in the anticone of the pruning point that was
+		// present at the time of the block creation. So if such situation happens we can be sure that it happens during
+		// IBD and that this block has at least pruningDepth-finalityInterval confirmations.
+		if !isInFutureOfPruningPoint {
+			return nil
+		}
+	}
+	block, err := v.blockStore.Block(v.databaseContext, stagingArea, blockHash)
+	if err != nil {
+		return err
+	}
+	// Check for nodeFee in block outputs
+	if len(block.Transactions) < 1 {
+		return nil
+	}
+	if len(block.Transactions[0].Outputs) < 1 {
+		return nil
+	}
+	reward, _ := v.coinbaseManager.CalcBlockSubsidy(stagingArea, blockHash)
+	hasDevFee := false
+	for _, transaction := range block.Transactions {
+		for _, output := range transaction.Outputs {
+			if v.coinbaseManager.CheckDevFee(reward, output) {
+				hasDevFee = true
+				break
+			}
+		}
+		if hasDevFee {
+			break
+		}
+	}
+	if !hasDevFee {
+		jsonBytes, _ := json.MarshalIndent(block, "", "    ")
+		return errors.Wrapf(ruleerrors.ErrDevFeeNotIncluded, "transactions do not include dev fee transaction. \n%s", string(jsonBytes))
+	}
 	return nil
 }

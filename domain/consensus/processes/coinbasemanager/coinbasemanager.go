@@ -9,7 +9,10 @@ import (
 	"github.com/karlsen-network/karlsend/v2/domain/consensus/utils/hashset"
 	"github.com/karlsen-network/karlsend/v2/domain/consensus/utils/subnetworks"
 	"github.com/karlsen-network/karlsend/v2/domain/consensus/utils/transactionhelper"
+	"github.com/karlsen-network/karlsend/v2/domain/consensus/utils/txscript"
+	"github.com/karlsen-network/karlsend/v2/domain/dagconfig"
 	"github.com/karlsen-network/karlsend/v2/infrastructure/db/database"
+	"github.com/karlsen-network/karlsend/v2/util"
 	"github.com/pkg/errors"
 )
 
@@ -29,6 +32,7 @@ type coinbaseManager struct {
 	blockStore          model.BlockStore
 	pruningStore        model.PruningStore
 	blockHeaderStore    model.BlockHeaderStore
+	params              *dagconfig.Params
 }
 
 func (c *coinbaseManager) ExpectedCoinbaseTransaction(stagingArea *model.StagingArea, blockHash *externalapi.DomainHash,
@@ -60,24 +64,30 @@ func (c *coinbaseManager) ExpectedCoinbaseTransaction(stagingArea *model.Staging
 	txOuts := make([]*externalapi.DomainTransactionOutput, 0, len(ghostdagData.MergeSetBlues()))
 	acceptanceDataMap := acceptanceDataFromArrayToMap(acceptanceData)
 	for _, blue := range ghostdagData.MergeSetBlues() {
-		txOut, hasReward, err := c.coinbaseOutputForBlueBlock(stagingArea, blue, acceptanceDataMap[*blue], daaAddedBlocksSet)
+		//txOut, hasReward, err := c.coinbaseOutputForBlueBlock(stagingArea, blue, acceptanceDataMap[*blue], daaAddedBlocksSet)
+		txOut, devTx, hasReward, err := c.coinbaseOutputForBlueBlockWithDevFee(stagingArea, blue, acceptanceDataMap[*blue], daaAddedBlocksSet)
 		if err != nil {
 			return nil, false, err
 		}
 
 		if hasReward {
 			txOuts = append(txOuts, txOut)
+			txOuts = append(txOuts, devTx)
 		}
 	}
 
-	txOut, hasRedReward, err := c.coinbaseOutputForRewardFromRedBlocks(
+	//txOut, hasRedReward, err := c.coinbaseOutputForRewardFromRedBlocks(
+	//	stagingArea, ghostdagData, acceptanceData, daaAddedBlocksSet, coinbaseData)
+	txOut, devTx, hasRedReward, err := c.coinbaseOutputForRewardFromRedBlocksWithDevFee(
 		stagingArea, ghostdagData, acceptanceData, daaAddedBlocksSet, coinbaseData)
+
 	if err != nil {
 		return nil, false, err
 	}
 
 	if hasRedReward {
 		txOuts = append(txOuts, txOut)
+		txOuts = append(txOuts, devTx)
 	}
 
 	subsidy, err := c.CalcBlockSubsidy(stagingArea, blockHash)
@@ -114,6 +124,7 @@ func (c *coinbaseManager) daaAddedBlocksSet(stagingArea *model.StagingArea, bloc
 
 // coinbaseOutputForBlueBlock calculates the output that should go into the coinbase transaction of blueBlock
 // If blueBlock gets no fee - returns nil for txOut
+/*
 func (c *coinbaseManager) coinbaseOutputForBlueBlock(stagingArea *model.StagingArea,
 	blueBlock *externalapi.DomainHash, blockAcceptanceData *externalapi.BlockAcceptanceData,
 	mergingBlockDAAAddedBlocksSet hashset.HashSet) (*externalapi.DomainTransactionOutput, bool, error) {
@@ -123,7 +134,7 @@ func (c *coinbaseManager) coinbaseOutputForBlueBlock(stagingArea *model.StagingA
 		return nil, false, err
 	}
 
-	if blockReward == 0 {
+	if blockReward <= 0 {
 		return nil, false, nil
 	}
 
@@ -140,7 +151,46 @@ func (c *coinbaseManager) coinbaseOutputForBlueBlock(stagingArea *model.StagingA
 
 	return txOut, true, nil
 }
+*/
 
+func (c *coinbaseManager) coinbaseOutputForBlueBlockWithDevFee(stagingArea *model.StagingArea,
+	blueBlock *externalapi.DomainHash, blockAcceptanceData *externalapi.BlockAcceptanceData,
+	mergingBlockDAAAddedBlocksSet hashset.HashSet) (*externalapi.DomainTransactionOutput, *externalapi.DomainTransactionOutput, bool, error) {
+	blockReward, err := c.calcMergedBlockReward(stagingArea, blueBlock, blockAcceptanceData, mergingBlockDAAAddedBlocksSet)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	devFeeDecodedAddress, err := util.DecodeAddress(c.params.DevFeeAddress, c.params.Prefix)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	devFeeScriptPublicKey, err := txscript.PayToAddrScript(devFeeDecodedAddress)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	//devFeeQuantity := uint64(float64(constants.DevFee) / 100 * float64(blockReward))
+	devFeeQuantity := uint64(float64(c.params.DevFee) / 100 * float64(blockReward))
+	blockReward -= devFeeQuantity
+	if blockReward <= 0 {
+		return nil, nil, false, nil
+	}
+	// the ScriptPublicKey for the coinbase is parsed from the coinbase payload
+	_, coinbaseData, _, err := c.ExtractCoinbaseDataBlueScoreAndSubsidy(blockAcceptanceData.TransactionAcceptanceData[0].Transaction)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	txOut := &externalapi.DomainTransactionOutput{
+		Value:           blockReward,
+		ScriptPublicKey: coinbaseData.ScriptPublicKey,
+	}
+	devTx := &externalapi.DomainTransactionOutput{
+		Value:           devFeeQuantity,
+		ScriptPublicKey: devFeeScriptPublicKey,
+	}
+	return txOut, devTx, true, nil
+}
+
+/*
 func (c *coinbaseManager) coinbaseOutputForRewardFromRedBlocks(stagingArea *model.StagingArea,
 	ghostdagData *externalapi.BlockGHOSTDAGData, acceptanceData externalapi.AcceptanceData, daaAddedBlocksSet hashset.HashSet,
 	coinbaseData *externalapi.DomainCoinbaseData) (*externalapi.DomainTransactionOutput, bool, error) {
@@ -165,6 +215,43 @@ func (c *coinbaseManager) coinbaseOutputForRewardFromRedBlocks(stagingArea *mode
 		ScriptPublicKey: coinbaseData.ScriptPublicKey,
 	}, true, nil
 }
+*/
+
+func (c *coinbaseManager) coinbaseOutputForRewardFromRedBlocksWithDevFee(stagingArea *model.StagingArea,
+	ghostdagData *externalapi.BlockGHOSTDAGData, acceptanceData externalapi.AcceptanceData, daaAddedBlocksSet hashset.HashSet,
+	coinbaseData *externalapi.DomainCoinbaseData) (*externalapi.DomainTransactionOutput, *externalapi.DomainTransactionOutput, bool, error) {
+	acceptanceDataMap := acceptanceDataFromArrayToMap(acceptanceData)
+	totalReward := uint64(0)
+	for _, red := range ghostdagData.MergeSetReds() {
+		reward, err := c.calcMergedBlockReward(stagingArea, red, acceptanceDataMap[*red], daaAddedBlocksSet)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		totalReward += reward
+	}
+	devFeeDecodedAddress, err := util.DecodeAddress(c.params.DevFeeAddress, c.params.Prefix)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	devFeeScriptPublicKey, err := txscript.PayToAddrScript(devFeeDecodedAddress)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	devFeeQuantity := uint64(float64(c.params.DevFee) / 100 * float64(totalReward))
+	totalReward -= devFeeQuantity
+	if totalReward <= 0 {
+		return nil, nil, false, nil
+	}
+	txOut := &externalapi.DomainTransactionOutput{
+		Value:           totalReward,
+		ScriptPublicKey: coinbaseData.ScriptPublicKey,
+	}
+	devTx := &externalapi.DomainTransactionOutput{
+		Value:           devFeeQuantity,
+		ScriptPublicKey: devFeeScriptPublicKey,
+	}
+	return txOut, devTx, true, nil
+}
 
 func acceptanceDataFromArrayToMap(acceptanceData externalapi.AcceptanceData) map[externalapi.DomainHash]*externalapi.BlockAcceptanceData {
 	acceptanceDataMap := make(map[externalapi.DomainHash]*externalapi.BlockAcceptanceData, len(acceptanceData))
@@ -172,6 +259,15 @@ func acceptanceDataFromArrayToMap(acceptanceData externalapi.AcceptanceData) map
 		acceptanceDataMap[*blockAcceptanceData.BlockHash] = blockAcceptanceData
 	}
 	return acceptanceDataMap
+}
+
+func (c *coinbaseManager) CheckDevFee(reward uint64, output *externalapi.DomainTransactionOutput) bool {
+	_, address, err := txscript.ExtractScriptPubKeyAddress(output.ScriptPublicKey, c.params)
+	if err != nil {
+		return false
+	}
+	devFeeAmount := uint64(float64(c.params.DevFee) / 100 * float64(reward))
+	return (address.EncodeAddress() == c.params.DevFeeAddress) && (output.Value >= devFeeAmount)
 }
 
 // CalcBlockSubsidy returns the subsidy amount a block at the provided blue score
@@ -305,7 +401,8 @@ func New(
 	daaBlocksStore model.DAABlocksStore,
 	blockStore model.BlockStore,
 	pruningStore model.PruningStore,
-	blockHeaderStore model.BlockHeaderStore) model.CoinbaseManager {
+	blockHeaderStore model.BlockHeaderStore,
+	params *dagconfig.Params) model.CoinbaseManager {
 
 	return &coinbaseManager{
 		databaseContext: databaseContext,
@@ -324,5 +421,6 @@ func New(
 		blockStore:          blockStore,
 		pruningStore:        pruningStore,
 		blockHeaderStore:    blockHeaderStore,
+		params:              params,
 	}
 }

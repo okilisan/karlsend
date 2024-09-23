@@ -10,6 +10,10 @@ import (
 
 // These constants are used to identify a specific RuleError.
 var (
+	// ErrDevFeeNotIncluded indicates that the transactions do not
+	// include dev fee.
+	ErrDevFeeNotIncluded = newRuleError("ErrDevFeeNotIncluded")
+
 	// ErrDuplicateBlock indicates a block with the same hash already
 	// exists.
 	ErrDuplicateBlock = newRuleError("ErrDuplicateBlock")

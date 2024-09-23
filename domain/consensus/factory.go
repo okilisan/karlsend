@@ -254,7 +254,8 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		daaBlocksStore,
 		blockStore,
 		pruningStore,
-		blockHeaderStore)
+		blockHeaderStore,
+		&config.Params)
 	headerTipsManager := headersselectedtipmanager.New(dbManager, dagTopologyManager, dagTraversalManager,
 		ghostdagManager, headersSelectedTipStore, headersSelectedChainStore)
 	genesisHash := config.GenesisHash

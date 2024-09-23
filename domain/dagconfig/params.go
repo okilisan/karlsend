@@ -191,8 +191,10 @@ type Params struct {
 	// MaxBlockLevel is the maximum possible block level.
 	MaxBlockLevel int
 
-	MergeDepth uint64
-	HFDAAScore uint64
+	MergeDepth    uint64
+	HFDAAScore    uint64
+	DevFee        uint64
+	DevFeeAddress string
 }
 
 // NormalizeRPCServerAddress returns addr with the current network default
@@ -284,6 +286,8 @@ var MainnetParams = Params{
 	MaxBlockLevel: 225,
 	MergeDepth:    defaultMergeDepth,
 	HFDAAScore:    26962009, // HF DAAscore to switch to khashv2 (Fri Sep 13 01:37:00 PM UTC 2024)
+	DevFee:        5,
+	DevFeeAddress: "karlsen:qzrq7v5jhsc5znvtfdg6vxg7dz5x8dqe4wrh90jkdnwehp6vr8uj7csdss2l7",
 }
 
 // TestnetParams defines the network parameters for the test Karlsen network.
@@ -350,6 +354,8 @@ var TestnetParams = Params{
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
 	HFDAAScore:    43200, // HF DAAscore to switch to khashv2 (12 hours after testnet launch)
+	DevFee:        5,
+	DevFeeAddress: "karlsentest:qrfdtcz926ykjk3vgrxz2cnsynefed7f8dvasm3ckzad2llpm6z8ypwjpwyex",
 }
 
 // SimnetParams defines the network parameters for the simulation test Karlsen
@@ -418,6 +424,8 @@ var SimnetParams = Params{
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
 	HFDAAScore:    3600,
+	DevFee:        5,
+	DevFeeAddress: "karlsendev:qp928nxy34knk3lp4tkdd6qgqlkasa68rdw9fk9rdqrgycwt7cnyw9xsnduwh",
 }
 
 // DevnetParams defines the network parameters for the development Karlsen network.
@@ -482,6 +490,8 @@ var DevnetParams = Params{
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
 	HFDAAScore:    3600,
+	DevFee:        10,
+	DevFeeAddress: "karlsendev:qp928nxy34knk3lp4tkdd6qgqlkasa68rdw9fk9rdqrgycwt7cnyw9xsnduwh",
 }
 
 // ErrDuplicateNet describes an error where the parameters for a Karlsen
