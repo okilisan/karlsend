@@ -425,7 +425,7 @@ var SimnetParams = Params{
 	MergeDepth:    defaultMergeDepth,
 	HFDAAScore:    3600,
 	DevFee:        5,
-	DevFeeAddress: "karlsendev:qp928nxy34knk3lp4tkdd6qgqlkasa68rdw9fk9rdqrgycwt7cnyw9xsnduwh",
+	DevFeeAddress: "karlsensim:qrw0gy9jyp9ehvqgq0kvtxasr8qkaz0njc74mw5jpuuwul4h406r63vzl0s3h",
 }
 
 // DevnetParams defines the network parameters for the development Karlsen network.
