@@ -381,8 +381,8 @@ var SimnetParams = Params{
 	SubsidyGenesisReward:            defaultSubsidyGenesisReward,
 	PreDeflationaryPhaseBaseSubsidy: defaultPreDeflationaryPhaseBaseSubsidy,
 	DeflationaryPhaseBaseSubsidy:    defaultDeflationaryPhaseBaseSubsidy,
-	TargetTimePerBlock:              time.Millisecond,
-	FinalityDuration:                time.Minute,
+	TargetTimePerBlock:              defaultTargetTimePerBlock,
+	FinalityDuration:                defaultFinalityDuration,
 	DifficultyAdjustmentWindowSize:  defaultDifficultyAdjustmentWindowSize,
 	MinDifficultyWindowLen:          10,
 	TimestampDeviationTolerance:     defaultTimestampDeviationTolerance,
@@ -391,8 +391,8 @@ var SimnetParams = Params{
 	//
 	// The miner confirmation window is defined as:
 	//   target proof of work timespan / target proof of work spacing
-	RuleChangeActivationThreshold: 75, // 75% of MinerConfirmationWindow
-	MinerConfirmationWindow:       100,
+	RuleChangeActivationThreshold: 1512, // 75% of MinerConfirmationWindow
+	MinerConfirmationWindow:       2016,
 
 	// Mempool parameters
 	RelayNonStdTxs: false,
@@ -408,7 +408,7 @@ var SimnetParams = Params{
 	// EnableNonNativeSubnetworks enables non-native/coinbase transactions
 	EnableNonNativeSubnetworks: false,
 
-	DisableDifficultyAdjustment: true,
+	DisableDifficultyAdjustment: false,
 
 	MaxCoinbasePayloadLength:                defaultMaxCoinbasePayloadLength,
 	MaxBlockMass:                            defaultMaxBlockMass,
